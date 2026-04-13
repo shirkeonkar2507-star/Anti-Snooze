@@ -1,323 +1,329 @@
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
+// AlarmOverlay.jsx
+// Orchestrates 3 mandatory games in order:
+//   1. Math Puzzle
+//   2. ZIP (connect pairs / fill grid)
+//   3. Block Pattern (memorize → recreate)
 
-const API = "http://localhost:8000";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import MathPuzzle   from "./MathPuzzle";
+import ZipPuzzle    from "./ZipPuzzle";
+import BlockPattern from "./BlockPattern";
 
 const DIFF_META = {
-  easy:   { label:"EASY",   color:"#22c55e", bg:"#22c55e0d", border:"#22c55e25" },
-  medium: { label:"MEDIUM", color:"#f59e0b", bg:"#f59e0b0d", border:"#f59e0b25" },
-  hard:   { label:"HARD",   color:"#ef4444", bg:"#ef44440d", border:"#ef444425" },
+  easy:   { label:"EASY",   color:"#4ade80", bg:"#4ade8012", border:"#4ade8033" },
+  medium: { label:"MEDIUM", color:"#fbbf24", bg:"#fbbf2412", border:"#fbbf2433" },
+  hard:   { label:"HARD",   color:"#f87171", bg:"#f8717112", border:"#f8717133" },
 };
 
-// Glitchy digit display
-function GlitchText({ text, color }) {
-  const [glitch, setGlitch] = useState(false);
+const GAMES = [
+  { id:"math",    label:"MATH",    icon:"∑", desc:"Solve the equation" },
+  { id:"zip",     label:"ZIP",     icon:"⬡", desc:"Connect all pairs · Fill every cell" },
+  { id:"pattern", label:"PATTERN", icon:"▦", desc:"Memorize · Recreate the block pattern" },
+];
+
+// ── Glitch text ───────────────────────────────────────────────────────────────
+function GlitchText({ text }) {
+  const [g, setG] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
-      setGlitch(true);
-      setTimeout(() => setGlitch(false), 120);
-    }, 3000 + Math.random() * 2000);
+      setG(true);
+      setTimeout(() => setG(false), 110);
+    }, 2200 + Math.random()*1800);
     return () => clearInterval(id);
   }, []);
-
   return (
-    <div style={{
-      position:"relative", display:"inline-block",
-      color, fontFamily:"'Courier New',monospace",
-    }}>
-      {glitch && (
-        <>
-          <span style={{
-            position:"absolute", inset:0,
-            color:"#ef4444", transform:"translate(-2px,1px)",
-            opacity:0.7, clipPath:"inset(30% 0 50% 0)", pointerEvents:"none",
-          }}>{text}</span>
-          <span style={{
-            position:"absolute", inset:0,
-            color:"#22c55e", transform:"translate(2px,-1px)",
-            opacity:0.7, clipPath:"inset(60% 0 20% 0)", pointerEvents:"none",
-          }}>{text}</span>
-        </>
-      )}
+    <div style={{ position:"relative", display:"inline-block", color:"#f1f5f9" }}>
+      {g && <>
+        <span style={{ position:"absolute", inset:0, color:"#f87171",
+          transform:"translate(-3px,1px)", opacity:0.55,
+          clipPath:"inset(20% 0 55% 0)", pointerEvents:"none" }}>{text}</span>
+        <span style={{ position:"absolute", inset:0, color:"#4ade80",
+          transform:"translate(3px,-1px)", opacity:0.55,
+          clipPath:"inset(55% 0 15% 0)", pointerEvents:"none" }}>{text}</span>
+      </>}
       <span>{text}</span>
     </div>
   );
 }
 
-// Animated countdown since alarm fired
+// ── Elapsed timer ─────────────────────────────────────────────────────────────
 function ElapsedTimer() {
-  const [sec, setSec] = useState(0);
+  const [s, setS] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setSec(s => s + 1), 1000);
+    const id = setInterval(() => setS(n=>n+1), 1000);
     return () => clearInterval(id);
   }, []);
-  const m = String(Math.floor(sec / 60)).padStart(2,"0");
-  const s = String(sec % 60).padStart(2,"0");
-  return <span style={{ fontVariantNumeric:"tabular-nums" }}>{m}:{s}</span>;
+  const mm = String(Math.floor(s/60)).padStart(2,"0");
+  const ss = String(s%60).padStart(2,"0");
+  return <span style={{ fontVariantNumeric:"tabular-nums" }}>{mm}:{ss}</span>;
 }
 
-function generateFallback(difficulty) {
-  const r = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
-  if (difficulty === "easy") {
-    const a = r(10,30), b = r(5,20);
-    return { question:`${a} + ${b}`, answer: a+b };
-  }
-  if (difficulty === "medium") {
-    const a = r(2,12), b = r(2,10), c = r(1,20);
-    return { question:`(${a} × ${b}) + ${c}`, answer: a*b+c };
-  }
-  const a = r(3,12), b = r(3,10), c = r(2,8), d = r(2,6);
-  return { question:`(${a} × ${b}) − (${c} × ${d})`, answer: a*b - c*d };
+// ── Progress bar across top ───────────────────────────────────────────────────
+function ProgressBar({ current, total, meta, completedGames }) {
+  return (
+    <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+      {GAMES.map((g, i) => {
+        const done    = completedGames.includes(g.id);
+        const active  = i === current;
+        return (
+          <div key={g.id} style={{
+            flex:1, display:"flex", flexDirection:"column",
+            alignItems:"center", gap:5,
+          }}>
+            <div style={{
+              width:"100%", height:3, borderRadius:2,
+              background: done ? "#4ade80" : active ? meta.color : "#1e2d4a",
+              boxShadow: active ? `0 0 8px ${meta.color}88` : done ? "0 0 6px #4ade8066" : "none",
+              transition:"background 0.4s",
+            }}/>
+            <div style={{
+              fontSize:9, letterSpacing:"0.2em", fontWeight:800,
+              color: done?"#4ade80" : active?meta.color : "#334155",
+              display:"flex", alignItems:"center", gap:4,
+            }}>
+              <span>{g.icon}</span>
+              <span>{done ? `${g.label} ✓` : g.label}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-export default function AlarmOverlay({ difficulty = "medium", onSolve }) {
-  const [puzzle, setPuzzle]   = useState(null);   // { question }
-  const [answer, setAnswer]   = useState(null);   // only for fallback mode
-  const [input, setInput]     = useState("");
-  const [attempts, setAttempts] = useState(0);
-  const [shake, setShake]     = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [solved, setSolved]   = useState(false);
-  const inputRef = useRef(null);
-
-  const meta = DIFF_META[difficulty] ?? DIFF_META.medium;
-
-  const fetchPuzzle = async () => {
-    setLoading(true); setInput("");
-    try {
-      const res = await axios.get(`${API}/get-puzzle?difficulty=${difficulty}`);
-      setPuzzle({ question: res.data.question });
-      setAnswer(null);
-    } catch {
-      const fb = generateFallback(difficulty);
-      setPuzzle({ question: fb.question });
-      setAnswer(fb.answer);
-    } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 80);
-    }
-  };
-
-  useEffect(() => { fetchPuzzle(); }, [difficulty]);
-
+// ── Game complete transition card ─────────────────────────────────────────────
+function StageClear({ game, meta, onContinue, isLast }) {
   useEffect(() => {
-    const onKey = e => { if (e.key === "Escape") e.preventDefault(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  const handleSubmit = async e => {
-    e?.preventDefault();
-    const val = parseInt(input, 10);
-    if (isNaN(val)) return;
-
-    let correct = false;
-    try {
-      const res = await axios.post(`${API}/verify-puzzle`, { answer: val });
-      correct = res.data.success;
-    } catch {
-      // fallback mode
-      correct = answer !== null && val === answer;
-    }
-
-    if (correct) {
-      setSolved(true);
-      setTimeout(onSolve, 800);
-    } else {
-      setAttempts(n => n + 1);
-      setShake(true);
-      setInput("");
-      setTimeout(() => { setShake(false); inputRef.current?.focus(); }, 550);
-    }
-  };
+    const id = setTimeout(onContinue, isLast ? 1200 : 1600);
+    return () => clearTimeout(id);
+  }, [onContinue, isLast]);
 
   return (
     <motion.div
-      initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+      initial={{ opacity:0, scale:0.9 }}
+      animate={{ opacity:1, scale:1 }}
+      exit={{ opacity:0, scale:1.05 }}
+      style={{
+        display:"flex", flexDirection:"column",
+        alignItems:"center", justifyContent:"center",
+        gap:12, padding:"32px 0",
+      }}
+    >
+      <motion.div
+        animate={{ scale:[1,1.2,1] }}
+        transition={{ duration:0.5 }}
+        style={{ fontSize:48 }}
+      >
+        {isLast ? "🔓" : "✅"}
+      </motion.div>
+      <div style={{
+        fontSize:isLast?28:22, fontWeight:900,
+        letterSpacing:"0.1em",
+        color: isLast ? "#4ade80" : meta.color,
+        textShadow:`0 0 20px ${isLast?"#4ade80":meta.color}`,
+      }}>
+        {isLast ? "ALARM DISARMED" : `${game.label} CLEARED`}
+      </div>
+      <div style={{ fontSize:10, color:"#64748b", letterSpacing:"0.3em", fontWeight:700 }}>
+        {isLast ? "GOOD MORNING" : `NEXT: ${GAMES[GAMES.findIndex(g=>g.id===game.id)+1]?.label ?? ""}`}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main overlay ──────────────────────────────────────────────────────────────
+export default function AlarmOverlay({ difficulty = "medium", onSolve }) {
+  const meta = DIFF_META[difficulty] ?? DIFF_META.medium;
+
+  const [gameIndex, setGameIndex]       = useState(0);   // 0,1,2
+  const [completedGames, setCompleted]  = useState([]);
+  const [stageClear, setStageClear]     = useState(false);
+  const [allDone, setAllDone]           = useState(false);
+
+  useEffect(() => {
+    const block = e => { if (e.key==="Escape") e.preventDefault(); };
+    window.addEventListener("keydown", block);
+    return () => window.removeEventListener("keydown", block);
+  }, []);
+
+  // 1. LOCKED GAME SOLVE HANDLER
+  // Wrapping in useCallback and adding the `stageClear` guard prevents race conditions.
+  const handleGameSolved = useCallback(() => {
+    if (stageClear || allDone) return; 
+
+    const game = GAMES[gameIndex];
+    setCompleted(c => c.includes(game.id) ? c : [...c, game.id]);
+    setStageClear(true);
+  }, [gameIndex, stageClear, allDone]);
+
+  // 2. CENTRALIZED STAGE PROGRESSION
+  // This is triggered strictly by the StageClear component's internal timer.
+  const handleStageContinue = useCallback(() => {
+    if (gameIndex === GAMES.length - 1) {
+      setAllDone(true);
+      onSolve(); // Master disarm
+    } else {
+      setStageClear(false);
+      setGameIndex(i => i + 1);
+    }
+  }, [gameIndex, onSolve]);
+
+  const currentGame = GAMES[gameIndex];
+  if (!currentGame) return null; // Safe fallback in case of state mismatch
+
+  return (
+    <motion.div
+      initial={{ opacity:0 }} animate={{ opacity:1 }}
       style={{
         position:"fixed", inset:0, zIndex:999,
         display:"flex", alignItems:"center", justifyContent:"center",
         fontFamily:"'Courier New','Lucida Console',monospace",
-        background:"rgba(2,4,8,0.94)",
-        backdropFilter:"blur(20px)",
+        background:"rgba(2,5,10,0.93)",
+        backdropFilter:"blur(22px)",
+        overflowY:"auto",
+        padding:"20px 0",
       }}
-      onPointerDown={e => e.stopPropagation()}
+      onPointerDown={e=>e.stopPropagation()}
     >
-      {/* Scanlines */}
       <div style={{
-        position:"absolute", inset:0, pointerEvents:"none",
-        backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.2) 2px,rgba(0,0,0,0.2) 4px)",
-      }} />
+        position:"fixed", inset:0, pointerEvents:"none",
+        backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.13) 2px,rgba(0,0,0,0.13) 4px)",
+      }}/>
 
-      {/* Pulsing radial glow behind card */}
       <motion.div
-        animate={{ scale:[1,1.3,1], opacity:[0.6,1,0.6] }}
-        transition={{ repeat:Infinity, duration:2, ease:"easeInOut" }}
+        animate={{ scale:[1,1.3,1], opacity:[0.4,0.75,0.4] }}
+        transition={{ repeat:Infinity, duration:2.5, ease:"easeInOut" }}
         style={{
-          position:"absolute", width:500, height:500, borderRadius:"50%",
-          background:`radial-gradient(circle, ${meta.color}14 0%, transparent 70%)`,
+          position:"fixed", width:600, height:600, borderRadius:"50%",
+          background:`radial-gradient(circle,${meta.color}14 0%,transparent 70%)`,
           pointerEvents:"none",
         }}
       />
 
-      {/* Card */}
       <motion.div
-        animate={shake ? {
-          x:[0,-14,14,-10,10,-6,6,-3,3,0],
-          transition:{ duration:0.5 }
-        } : { x:0 }}
         style={{
           position:"relative", zIndex:1,
-          width:380, borderRadius:4,
+          width: currentGame.id==="zip" ? 420 : 400,
+          maxWidth:"95vw",
+          borderRadius:8,
           border:`1px solid ${meta.border}`,
-          background:"#05080d",
-          padding:"40px 36px",
-          boxShadow:`0 0 0 1px #0f172a, 0 0 80px ${meta.color}18`,
+          background:"#060c16",
+          padding:"28px 30px",
+          boxShadow:`0 0 0 1px #0f1a2e, 0 0 80px ${meta.color}1a`,
         }}
       >
-        {/* Top bar */}
         <div style={{
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          marginBottom:28,
+          display:"flex", alignItems:"center",
+          justifyContent:"space-between", marginBottom:20,
         }}>
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-            {/* Traffic-light style dots — all red when ringing */}
-            {["#ef4444","#ef4444","#ef4444"].map((c,i) => (
+          <div style={{ display:"flex", gap:6 }}>
+            {[0,1,2].map(i=>(
               <motion.div key={i}
-                animate={{ opacity:[1,0.3,1] }}
-                transition={{ repeat:Infinity, duration:0.9, delay:i*0.15 }}
-                style={{ width:8, height:8, borderRadius:"50%", background:c,
-                  boxShadow:`0 0 6px ${c}` }}
+                animate={{ opacity:[1,0.2,1] }}
+                transition={{ repeat:Infinity, duration:0.8, delay:i*0.17 }}
+                style={{ width:8, height:8, borderRadius:"50%",
+                  background:"#f87171", boxShadow:"0 0 7px #f87171" }}
               />
             ))}
           </div>
-          <span style={{ fontSize:8, letterSpacing:"0.4em", color:"#334155" }}>
-            ANTI-SNOOZE · ALARM TRIGGERED
-          </span>
-          <span style={{
-            fontSize:8, letterSpacing:"0.2em", padding:"3px 8px",
-            border:`1px solid ${meta.border}`, borderRadius:2,
-            color: meta.color, background: meta.bg,
-          }}>{meta.label}</span>
-        </div>
 
-        {/* Big WAKE UP */}
-        <div style={{ textAlign:"center", marginBottom:28 }}>
-          <GlitchText
-            text="WAKE UP"
-            color="#f1f5f9"
-          />
           <div style={{
-            fontSize:"clamp(2.2rem,8vw,3.6rem)", fontWeight:700,
-            letterSpacing:"0.12em", lineHeight:1,
-            marginBottom:4,
-          }} />
-          {/* Elapsed time */}
-          <div style={{ fontSize:10, color:"#334155", letterSpacing:"0.35em", marginTop:8 }}>
-            ELAPSED &nbsp;<ElapsedTimer />
+            fontSize:"clamp(1.4rem,4vw,2rem)", fontWeight:900,
+            letterSpacing:"0.1em",
+          }}>
+            <GlitchText text="WAKE UP" />
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3 }}>
+            <span style={{
+              fontSize:8, letterSpacing:"0.2em", padding:"2px 8px",
+              borderRadius:3, color:meta.color,
+              background:meta.bg, border:`1px solid ${meta.border}`,
+              fontWeight:800,
+            }}>{meta.label}</span>
+            <span style={{ fontSize:8, color:"#334155", letterSpacing:"0.2em" }}>
+              <ElapsedTimer/>
+            </span>
           </div>
         </div>
 
-        {/* Divider */}
-        <div style={{ height:1, background:`linear-gradient(90deg,transparent,${meta.color}44,transparent)`, marginBottom:24 }} />
+        <ProgressBar
+          current={gameIndex}
+          total={GAMES.length}
+          meta={meta}
+          completedGames={completedGames}
+        />
 
-        {/* Puzzle */}
-        <div style={{ marginBottom:20 }}>
-          <div style={{ fontSize:9, letterSpacing:"0.35em", color:"#334155", marginBottom:10 }}>
-            ◈ SOLVE TO DISARM
-          </div>
-          <AnimatePresence mode="wait">
-            {loading ? (
-              <motion.div key="loading"
-                animate={{ opacity:[0.4,1,0.4] }} transition={{ repeat:Infinity, duration:1 }}
-                style={{ fontSize:11, color:"#334155", letterSpacing:"0.3em", padding:"20px 0", textAlign:"center" }}
-              >
-                GENERATING PUZZLE…
-              </motion.div>
-            ) : (
-              <motion.div key={puzzle?.question}
-                initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }}
-                style={{
-                  fontSize:"clamp(1.5rem,5vw,2.2rem)", fontWeight:700,
-                  textAlign:"center", letterSpacing:"0.1em",
-                  padding:"20px 16px", borderRadius:3,
-                  border:`1px solid ${meta.border}`,
-                  background: meta.bg,
-                  color: meta.color,
-                  textShadow:`0 0 20px ${meta.color}60`,
-                }}
-              >
-                {puzzle?.question} = ?
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <AnimatePresence mode="wait">
+          {!stageClear && (
+            <motion.div key={`title-${gameIndex}`}
+              initial={{ opacity:0, y:-6 }} animate={{ opacity:1, y:0 }}
+              exit={{ opacity:0 }}
+              style={{ marginBottom:18 }}
+            >
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                <span style={{ fontSize:18, color:meta.color }}>{currentGame.icon}</span>
+                <span style={{
+                  fontSize:12, fontWeight:800, letterSpacing:"0.3em", color:"#f1f5f9",
+                }}>STAGE {gameIndex+1}/3 · {currentGame.label}</span>
+              </div>
+              <p style={{
+                fontSize:9, color:"#64748b",
+                letterSpacing:"0.25em", fontWeight:700, margin:0,
+              }}>{currentGame.desc.toUpperCase()}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div style={{
+          height:1, marginBottom:20,
+          background:`linear-gradient(90deg,transparent,${meta.color}55,transparent)`,
+        }}/>
+
+        <AnimatePresence mode="wait">
+          {stageClear ? (
+            <StageClear
+              key="clear"
+              game={currentGame}
+              meta={meta}
+              isLast={gameIndex === GAMES.length - 1}
+              onContinue={handleStageContinue} // 3. PROPERLY WIRED CONTINUE TRIGGER
+            />
+          ) : (
+            <motion.div
+              key={`game-${gameIndex}`}
+              initial={{ opacity:0, x:30 }}
+              animate={{ opacity:1, x:0 }}
+              exit={{ opacity:0, x:-30 }}
+              transition={{ duration:0.3 }}
+            >
+              {currentGame.id === "math" && (
+                <MathPuzzle difficulty={difficulty} meta={meta} onSolve={handleGameSolved} />
+              )}
+              {currentGame.id === "zip" && (
+                <ZipPuzzle difficulty={difficulty} meta={meta} onSolve={handleGameSolved} />
+              )}
+              {currentGame.id === "pattern" && (
+                <BlockPattern difficulty={difficulty} meta={meta} onSolve={handleGameSolved} />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div style={{
+          marginTop:16, textAlign:"center",
+          fontSize:9, color:"#1e2d4a",
+          letterSpacing:"0.2em", fontWeight:700,
+        }}>
+          {completedGames.length === 0
+            ? "3 CHALLENGES STAND BETWEEN YOU AND YOUR DAY"
+            : completedGames.length === 1
+            ? "1 DOWN · 2 TO GO · NO GOING BACK"
+            : completedGames.length === 2
+            ? "LAST ONE · FINISH STRONG"
+            : ""}
         </div>
-
-        {/* Answer input */}
-        <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <input
-            ref={inputRef}
-            type="number"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            placeholder="ANSWER"
-            disabled={loading || solved}
-            style={{
-              width:"100%", padding:"14px", borderRadius:3,
-              background:"#080b10",
-              border:`1px solid ${input ? meta.color+"66" : "#0f172a"}`,
-              color: meta.color,
-              fontSize:28, textAlign:"center",
-              fontFamily:"inherit", letterSpacing:"0.1em",
-              outline:"none", caretColor: meta.color,
-              transition:"border-color 0.2s",
-              boxSizing:"border-box",
-            }}
-          />
-
-          {/* Attempts warning */}
-          <AnimatePresence>
-            {attempts > 0 && (
-              <motion.div
-                initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:"auto" }}
-                style={{ fontSize:9, letterSpacing:"0.25em", color:"#ef4444", textAlign:"center" }}
-              >
-                {attempts} FAILED ATTEMPT{attempts>1?"S":""} — KEEP TRYING
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <button type="submit"
-            disabled={loading || !input || solved}
-            style={{
-              padding:"14px", borderRadius:3,
-              background: input && !loading ? meta.color : "transparent",
-              border:`1px solid ${input && !loading ? meta.color : "#0f172a"}`,
-              color: input && !loading ? "#000" : "#0f172a",
-              fontSize:10, letterSpacing:"0.45em",
-              fontFamily:"inherit", fontWeight:700,
-              cursor: input && !loading ? "pointer" : "not-allowed",
-              transition:"all 0.15s",
-              boxShadow: input ? `0 0 24px ${meta.color}40` : "none",
-            }}
-          >
-            {solved ? "DISARMED ◆" : "VERIFY & DISARM"}
-          </button>
-        </form>
-
-        {/* Roommate guilt */}
-        {attempts >= 4 && (
-          <motion.div
-            initial={{ opacity:0 }} animate={{ opacity:1 }}
-            style={{
-              marginTop:16, fontSize:9, letterSpacing:"0.2em",
-              color:"#334155", textAlign:"center",
-            }}
-          >
-            YOUR ROOMMATES ARE AWAKE NOW. SOLVE IT.
-          </motion.div>
-        )}
       </motion.div>
     </motion.div>
   );
