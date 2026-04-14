@@ -3,7 +3,8 @@
 **Anti-Snooze** is a modern, full-stack digital alarm clock designed specifically for hostellers and students who struggle with oversleeping. Unlike traditional alarms, this application locks the screen and forces the user to solve a cognitive puzzle before the alarm can be dismissed.
 
 ## Preview
-![Alarm Clock Image] (frontend\src\assets\AlarmClock.png)
+
+<img width="1919" height="1071" alt="AlarmClock" src="https://github.com/user-attachments/assets/4ed358ef-f363-4660-b51c-a4bc33abeb4f" />
 
 ## 🚀 Key Features
 - **Cognitive Interlock:** Prevents dismissal of alarms until a math or logic puzzle is solved correctly.
