@@ -109,7 +109,7 @@ function AnalogClock({ date }) {
       <line key={i}
         x1={50 + (big?40:43.5)*Math.cos(rad)} y1={50 + (big?40:43.5)*Math.sin(rad)}
         x2={50 + 46*Math.cos(rad)}             y2={50 + 46*Math.sin(rad)}
-        stroke={big?"#fbbf24":"#3b4a6b"} strokeWidth={big?1.0:0.5}
+        stroke={big?"#56e4fd":"#3b4a6b"} strokeWidth={big?1.0:0.5}
       />
     );
   });
@@ -117,7 +117,7 @@ function AnalogClock({ date }) {
   return (
     <svg viewBox="0 0 100 100" style={{ width:"100%", height:"100%" }}>
       <circle cx="50" cy="50" r="48" fill="#0a0f1a" stroke="#1e2d4a" strokeWidth="1.2" />
-      <circle cx="50" cy="50" r="46" fill="none" stroke="#fbbf2422" strokeWidth="0.5" />
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#114b55" strokeWidth="0.5" />
       {ticks}
       {[12,1,2,3,4,5,6,7,8,9,10,11].map((n,i) => {
         const a = ((i/12)*360-90)*(Math.PI/180);
@@ -131,9 +131,9 @@ function AnalogClock({ date }) {
       })}
       {hand(h*30, 23, 2.2, "#e2e8f0", false)}
       {hand(m*6,  31, 1.4, "#cbd5e1", false)}
-      {hand(s*6,  35, 0.8, "#fbbf24", true)}
-      <circle cx="50" cy="50" r="1.8" fill="#fbbf24"
-        style={{ filter:"drop-shadow(0 0 5px #fbbf24)" }} />
+      {hand(s*6,  35, 0.8, "#56e4fd", true)}
+      <circle cx="50" cy="50" r="1.8" fill="#56e4fd"
+        style={{ filter:"drop-shadow(0 0 5px #56e4fd)" }} />
     </svg>
   );
 }
@@ -394,7 +394,7 @@ export default function App() {
               display:"flex", alignItems:"baseline", gap:2,
             }}>
               <span>{hh}</span>
-              <span style={{color:"#fbbf24",margin:"0 2px",animation:"blink 1s step-end infinite"}}>:</span>
+              <span style={{color:"#7cc0f8",margin:"0 2px",animation:"blink 1s step-end infinite"}}>:</span>
               <span>{mm}</span>
               <span style={{fontSize:"32%",color:"#94a3b8",marginLeft:"0.5em",fontWeight:400}}>{ss}</span>
             </div>
