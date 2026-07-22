@@ -227,32 +227,39 @@ export default function App() {
   }, []);
 
   // ── WebSocket with auto-reconnect ─────────────────────────────────────────
-  const connect = useCallback(() => {
-    setWsStatus("connecting");
-    const ws = new WebSocket("wss://anti-snooze.onrender.com/ws");
-    wsRef.current = ws;
-    ws.onopen  = () => setWsStatus("ok");
-    ws.onclose = () => {
-      setWsStatus("lost");
-      reconnRef.current = setTimeout(connect, 3000);
-    };
-    ws.onmessage = (e) => {
-      const d = JSON.parse(e.data);
-      if (d.action === "TRIGGER_ALARM") {
-        setRingDiff(d.difficulty || "medium");
-        setIsRinging(true);
-        startAudio();           // reads toneModeRef + fileAudioRef — always fresh
-      }
-      if (d.action === "DISMISS_ALARM") {
-        stopAudio();
-      }
-    };
-  }, [startAudio, stopAudio]);
+  const connectRef = useRef(null);
+
+const connect = useCallback(() => {
+  setWsStatus("connecting");
+  const ws = new WebSocket("wss://anti-snooze.onrender.com/ws");
+  wsRef.current = ws;
+  ws.onopen  = () => setWsStatus("ok");
+  ws.onclose = () => {
+    setWsStatus("lost");
+    reconnRef.current = setTimeout(() => connectRef.current(), 3000);
+  };
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.action === "TRIGGER_ALARM") {
+      setRingDiff(d.difficulty || "medium");
+      setIsRinging(true);
+      startAudio();
+    }
+    if (d.action === "DISMISS_ALARM") {
+      stopAudio();
+    }
+  };
+}, [startAudio, stopAudio]);
+
 
   useEffect(() => {
-    connect();
-    return () => { clearTimeout(reconnRef.current); wsRef.current?.close(); };
-  }, [connect]);
+  const id = setTimeout(connect, 0);
+  return () => {
+    clearTimeout(id);
+    clearTimeout(reconnRef.current);
+    wsRef.current?.close();
+  };
+}, [connect]);
 
   // ── Custom tone file upload ────────────────────────────────────────────────
   const handleFileUpload = (e) => {
