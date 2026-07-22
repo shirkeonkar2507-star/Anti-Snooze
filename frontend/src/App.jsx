@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import AlarmOverlay from "./components/AlarmOverlay";
 import axios from "axios";
 
-const API = "http://localhost:8000";
+const API = "https://anti-snooze.onrender.com";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WEB AUDIO ALARM ENGINE
@@ -229,7 +229,7 @@ export default function App() {
   // ── WebSocket with auto-reconnect ─────────────────────────────────────────
   const connect = useCallback(() => {
     setWsStatus("connecting");
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    const ws = new WebSocket("wss://anti-snooze.onrender.com/ws");
     wsRef.current = ws;
     ws.onopen  = () => setWsStatus("ok");
     ws.onclose = () => {
